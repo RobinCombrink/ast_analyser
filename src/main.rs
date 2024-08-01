@@ -31,7 +31,7 @@ fn is_as<'a>(node: Node<'a>) -> Option<Node<'a>> {
     None
 }
 
-// Taken from: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
+// Inspired by from: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
 fn traverse<'a, F>(mut cursor: TreeCursor<'a>, mut callback: F, failures: &mut Vec<Node<'a>>)
 where
     F: FnMut(Node) -> Option<Node>,
