@@ -1,0 +1,11 @@
+[package]
+name = "no_as"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-sitter = "0.22.6"
+tree-sitter-dart = "0.0.4"
+
+[build-dependencies]
+cc="*"
