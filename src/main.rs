@@ -1,6 +1,7 @@
 use std::fs;
 
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, TreeCursor};
+use walkdir::WalkDir;
 
 const AS_OPERATOR_ID: u16 = 234;
 
@@ -10,21 +11,32 @@ fn main() {
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let source_code = fs::read("test_files/test.dart").unwrap();
+    let mut all_failures: Vec<Node> = Vec::new();
+    for entry in WalkDir::new("./") {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(_) => {
+                // error!("Error walking directory: {}\n{e}", path.to_str().unwrap());
+                continue;
+            }
+        };
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let source_code = fs::read(entry.path()).expect("Could not read path");
+        let tree = parser.parse(source_code, None).unwrap();
+        let cursor = tree.walk();
+        let mut new_failures = traverse(cursor, |node| is_as(node));
+        all_failures.append(&mut new_failures); // Merge into all_failures
+    }
+    println!("`as` count: {}", all_failures.len());
 
-    let tree = parser.parse(source_code, None).unwrap();
-
-    let mut failures: Vec<Node> = vec![];
-
-    traverse(tree.walk(), |node| is_as(node), &mut failures);
-    println!("`as` count: {}", failures.len());
-
-    for failure in failures {
+    for failure in all_failures {
         println!("{:#?}", failure);
     }
 }
 
-fn is_as<'a>(node: Node<'a>) -> Option<Node<'a>> {
+fn is_as(node: Node) -> Option<Node> {
     if node.grammar_id() == AS_OPERATOR_ID {
         return Some(node);
     }
@@ -32,10 +44,11 @@ fn is_as<'a>(node: Node<'a>) -> Option<Node<'a>> {
 }
 
 // Inspired by from: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
-fn traverse<'a, F>(mut cursor: TreeCursor<'a>, mut callback: F, failures: &mut Vec<Node<'a>>)
+fn traverse<F>(mut cursor: TreeCursor, mut callback: F) -> Vec<Node>
 where
     F: FnMut(Node) -> Option<Node>,
 {
+    let mut failures: Vec<Node> = Vec::new();
     loop {
         if let Some(failure) = callback(cursor.node()) {
             failures.push(failure);
@@ -51,7 +64,7 @@ where
 
         loop {
             if !cursor.goto_parent() {
-                return;
+                return failures;
             }
 
             if cursor.goto_next_sibling() {
