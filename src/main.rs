@@ -1,9 +1,31 @@
-use std::fs;
+use std::{
+    collections::{btree_map::Entry, HashMap},
+    fs,
+};
 
 use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree, TreeCursor};
 use walkdir::{DirEntry, WalkDir};
 
 const AS_OPERATOR_ID: u16 = 234;
+
+#[derive(Debug)]
+struct FailureNode {
+    grammar_id: u16,
+    grammar_name: String,
+    start_position: Point,
+    end_position: Point,
+}
+
+impl From<Node<'_>> for FailureNode {
+    fn from(value: Node) -> Self {
+        Self {
+            grammar_id: value.grammar_id(),
+            grammar_name: value.grammar_name().to_owned(),
+            start_position: value.start_position(),
+            end_position: value.end_position(),
+        }
+    }
+}
 
 fn main() {
     let mut parser = Parser::new();
@@ -11,71 +33,49 @@ fn main() {
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let mut all_failures: Vec<Node> = Vec::new();
-    // match find_failures_for_file(
-    //     &mut parser,
-    let entry = WalkDir::new("./test_files/test.dart")
+    let failures: Vec<FailureNode> = WalkDir::new("test_files")
         .into_iter()
-        .next()
-        .unwrap()
-        .unwrap();
-    let source_code = fs::read(entry.path()).expect("Could not read path");
-    let tree = parser.parse(&source_code, None).expect("Could not parse");
-    let cursor = tree.walk();
-    all_failures.append(&mut traverse(cursor, |node| is_as(node)));
-    // ) {
-    //     Some(mut failures) => all_failures.append(&mut failures),
-    //     None => todo!(),
-    // }
-    // for entry in WalkDir::new("./") {
-    //     let entry = match entry {
-    //         Ok(entry) => entry,
-    //         Err(_) => {
-    //             // error!("Error walking directory: {}\n{e}", path.to_str().unwrap());
-    //             continue;
-    //         }
-    //     };
-    // }
-    println!("`as` count: {}", &all_failures.len());
+        .filter_map(|entry| match entry {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                println!("{e}");
+                None
+            }
+        })
+        .filter(|entry| !entry.file_type().is_dir())
+        .filter_map(|entry| match fs::read(entry.path()) {
+            Ok(source) => Some(source),
+            Err(e) => {
+                println!("{e}");
+                None
+            }
+        })
+        .map(|source_code| parser.parse(source_code, None).expect("Could not parse"))
+        .flat_map(|tree| {
+            let cursor = tree.walk();
+            traverse(cursor, |node| is_as(node.clone()))
+        })
+        .collect();
 
-    for failure in &all_failures {
-        println!("{:#?}", failure);
+    println!("Failures: {}", failures.len());
+    for failure in failures {
+        println!("{:#?}", failure)
     }
 }
 
-// fn find_failures_for_file<'a>(parser: &mut Parser, entry: DirEntry) -> Option<Vec<Node>> {
-//     if !entry.file_type().is_file() {
-//         return None;
-//     }
-//     let source_code = fs::read(entry.path()).expect("Could not read path");
-//     let tree = parser.parse(&source_code, None);
-//     let tree = match tree {
-//         Some(tree) => tree,
-//         None => {
-//             println!("Could not parse source code at path: {:#?}", entry.path());
-//             return None;
-//         }
-//     };
-// let failures = traverse(cursor, |node| is_as(node));
-// return Some(failures);
-// }
-//
-fn is_as(node: Node) -> Option<Node> {
-    if node.grammar_id() == AS_OPERATOR_ID {
-        return Some(node);
-    }
-    None
+fn is_as(node: Node) -> bool {
+    node.grammar_id() == AS_OPERATOR_ID
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
-fn traverse<'a, F>(mut cursor: TreeCursor<'a>, mut callback: F) -> Vec<Node<'a>>
+fn traverse<F>(mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
 where
-    F: FnMut(Node) -> Option<Node>,
+    F: FnMut(Node) -> bool,
 {
-    let mut failures: Vec<Node> = Vec::new();
+    let mut failures: Vec<FailureNode> = Vec::new();
     loop {
-        if let Some(failure) = callback(cursor.node()) {
-            failures.push(failure);
+        if callback(cursor.node()) {
+            failures.push(cursor.node().into());
         }
 
         if cursor.goto_first_child() {
