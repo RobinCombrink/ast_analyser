@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
 tree-sitter = "0.22.6"
 tree-sitter-dart = "0.0.4"
 walkdir = "2.5.0"

@@ -3,6 +3,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::{anyhow, Error};
+
 use tree_sitter::{Node, Parser, Point, TreeCursor};
 use walkdir::{DirEntry, WalkDir};
 
@@ -11,23 +13,37 @@ const COMMENT_OPERATOR_ID: u16 = 410;
 
 #[derive(Debug)]
 struct FailureNode {
-    grammar_id: u16,
     grammar_name: String,
+    grammar_id: u16,
     start_position: Point,
     end_position: Point,
-    file_path: PathBuf,
 }
 
-impl Into<FailureNode> for (&Path, Node<'_>) {
-    fn into(self) -> FailureNode {
-        let (file_path, node) = self;
-        FailureNode {
-            grammar_name: node.grammar_name().to_owned(),
-            file_path: file_path.to_path_buf(),
-            grammar_id: node.grammar_id(),
-            start_position: node.start_position(),
-            end_position: node.end_position(),
+impl TryInto<FailureNode> for (&'_ [u8], Node<'_>) {
+    type Error = Error;
+
+    fn try_into(self) -> Result<FailureNode, Self::Error> {
+        let (source, node) = self;
+        if node.grammar_id() != COMMENT_OPERATOR_ID {
+            return Ok(FailureNode {
+                grammar_name: node.grammar_name().to_owned(),
+                grammar_id: node.grammar_id(),
+                start_position: node.start_position(),
+                end_position: node.end_position(),
+            });
         }
+
+        let text = node.utf8_text(source)?.to_lowercase();
+
+        if text.contains("todo") {
+            return Ok(FailureNode {
+                grammar_name: node.grammar_name().to_owned(),
+                grammar_id: node.grammar_id(),
+                start_position: node.start_position(),
+                end_position: node.end_position(),
+            });
+        }
+        Err(anyhow!("The comment does not contain a TODO"))
     }
 }
 
@@ -48,21 +64,21 @@ fn main() {
         })
         .filter(|entry| !entry.file_type().is_dir())
         .filter_map(|entry| match fs::read(entry.path()) {
-            Ok(source) => Some((entry, source)),
+            Ok(source) => Some(source),
             Err(e) => {
                 println!("{e}");
                 None
             }
         })
-        .map(|(entry, source_code)| {
+        .map(|source_code| {
             (
-                entry,
+                source_code.clone(),
                 parser.parse(source_code, None).expect("Could not parse"),
             )
         })
-        .flat_map(|(entry, tree)| {
+        .flat_map(|(source_code, tree)| {
             let cursor = tree.walk();
-            traverse(entry.path(), cursor, |node| {
+            traverse(&source_code, cursor, |node| {
                 is_as(node.clone()) || is_comment(node.clone())
             })
         })
@@ -83,15 +99,21 @@ fn is_comment(node: Node) -> bool {
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
-fn traverse<F>(file_path: &Path, mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
+fn traverse<F>(source: &[u8], mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
 where
     F: FnMut(Node) -> bool,
 {
     let mut failures: Vec<FailureNode> = Vec::new();
     loop {
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
-        if callback(cursor.node()) {
-            failures.push((file_path, cursor.node()).into());
+        let node = cursor.node();
+        if callback(node) {
+            match (source, node).try_into() {
+                Ok(failure) => failures.push(failure),
+                Err(_) => {
+                    //TODO It's not really an error
+                },
+            }
         }
 
         if cursor.goto_first_child() {
