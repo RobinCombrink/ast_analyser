@@ -15,12 +15,11 @@ struct FailureNode {
     start_position: Point,
     end_position: Point,
 }
-
-impl TryInto<FailureNode> for (&'_ [u8], Node<'_>) {
+impl TryFrom<(&'_ [u8], Node<'_>)> for FailureNode {
     type Error = Error;
 
-    fn try_into(self) -> Result<FailureNode, Self::Error> {
-        let (source, node) = self;
+    fn try_from(value: (&'_ [u8], Node<'_>)) -> Result<Self, Self::Error> {
+        let (source, node) = value;
         if node.grammar_id() != COMMENT_OPERATOR_ID {
             return Ok(FailureNode {
                 grammar_name: node.grammar_name().to_owned(),
@@ -99,11 +98,8 @@ where
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         let node = cursor.node();
         if callback(node) {
-            match (source, node).try_into() {
-                Ok(failure) => failures.push(failure),
-                Err(_) => {
-                    //TODO It's not really an error
-                }
+            if let Ok(failure) = FailureNode::try_from((source, node)) {
+                failures.push(failure);
             }
         }
 
