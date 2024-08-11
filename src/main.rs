@@ -1,7 +1,10 @@
-use std::fs;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use tree_sitter::{Node, Parser, Point, TreeCursor};
-use walkdir::WalkDir;
+use walkdir::{DirEntry, WalkDir};
 
 const AS_OPERATOR_ID: u16 = 234;
 const COMMENT_OPERATOR_ID: u16 = 410;
@@ -12,15 +15,18 @@ struct FailureNode {
     grammar_name: String,
     start_position: Point,
     end_position: Point,
+    file_path: PathBuf,
 }
 
-impl From<Node<'_>> for FailureNode {
-    fn from(value: Node) -> Self {
-        Self {
-            grammar_id: value.grammar_id(),
-            grammar_name: value.grammar_name().to_owned(),
-            start_position: value.start_position(),
-            end_position: value.end_position(),
+impl Into<FailureNode> for (&Path, Node<'_>) {
+    fn into(self) -> FailureNode {
+        let (file_path, node) = self;
+        FailureNode {
+            grammar_name: node.grammar_name().to_owned(),
+            file_path: file_path.to_path_buf(),
+            grammar_id: node.grammar_id(),
+            start_position: node.start_position(),
+            end_position: node.end_position(),
         }
     }
 }
@@ -42,16 +48,23 @@ fn main() {
         })
         .filter(|entry| !entry.file_type().is_dir())
         .filter_map(|entry| match fs::read(entry.path()) {
-            Ok(source) => Some(source),
+            Ok(source) => Some((entry, source)),
             Err(e) => {
                 println!("{e}");
                 None
             }
         })
-        .map(|source_code| parser.parse(source_code, None).expect("Could not parse"))
-        .flat_map(|tree| {
+        .map(|(entry, source_code)| {
+            (
+                entry,
+                parser.parse(source_code, None).expect("Could not parse"),
+            )
+        })
+        .flat_map(|(entry, tree)| {
             let cursor = tree.walk();
-            traverse(cursor, |node| is_as(node.clone()) || is_comment(node.clone()))
+            traverse(entry.path(), cursor, |node| {
+                is_as(node.clone()) || is_comment(node.clone())
+            })
         })
         .collect();
 
@@ -66,11 +79,11 @@ fn is_as(node: Node) -> bool {
 }
 
 fn is_comment(node: Node) -> bool {
-    node.grammar_id() == COMMENT_OPERATOR_ID 
+    node.grammar_id() == COMMENT_OPERATOR_ID
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
-fn traverse<F>(mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
+fn traverse<F>(file_path: &Path, mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
 where
     F: FnMut(Node) -> bool,
 {
@@ -78,7 +91,7 @@ where
     loop {
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         if callback(cursor.node()) {
-            failures.push(cursor.node().into());
+            failures.push((file_path, cursor.node()).into());
         }
 
         if cursor.goto_first_child() {
