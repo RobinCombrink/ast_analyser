@@ -4,6 +4,7 @@ use tree_sitter::{Node, Parser, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const AS_OPERATOR_ID: u16 = 234;
+const COMMENT_OPERATOR_ID: u16 = 410;
 
 #[derive(Debug)]
 struct FailureNode {
@@ -30,7 +31,7 @@ fn main() {
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let failures: Vec<FailureNode> = WalkDir::new("test_files")
+    let failures: Vec<FailureNode> = WalkDir::new("test_files/comment")
         .into_iter()
         .filter_map(|entry| match entry {
             Ok(entry) => Some(entry),
@@ -50,7 +51,7 @@ fn main() {
         .map(|source_code| parser.parse(source_code, None).expect("Could not parse"))
         .flat_map(|tree| {
             let cursor = tree.walk();
-            traverse(cursor, |node| is_as(node.clone()))
+            traverse(cursor, |node| is_as(node.clone()) || is_comment(node.clone()))
         })
         .collect();
 
@@ -64,6 +65,10 @@ fn is_as(node: Node) -> bool {
     node.grammar_id() == AS_OPERATOR_ID
 }
 
+fn is_comment(node: Node) -> bool {
+    node.grammar_id() == COMMENT_OPERATOR_ID 
+}
+
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
 fn traverse<F>(mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
 where
@@ -71,6 +76,7 @@ where
 {
     let mut failures: Vec<FailureNode> = Vec::new();
     loop {
+        // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         if callback(cursor.node()) {
             failures.push(cursor.node().into());
         }
