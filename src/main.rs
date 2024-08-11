@@ -1,12 +1,9 @@
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use anyhow::{anyhow, Error};
 
 use tree_sitter::{Node, Parser, Point, TreeCursor};
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 const AS_OPERATOR_ID: u16 = 234;
 const COMMENT_OPERATOR_ID: u16 = 410;
@@ -70,16 +67,10 @@ fn main() {
                 None
             }
         })
-        .map(|source_code| {
-            (
-                source_code.clone(),
-                parser.parse(source_code, None).expect("Could not parse"),
-            )
-        })
-        .flat_map(|(source_code, tree)| {
-            let cursor = tree.walk();
-            traverse(&source_code, cursor, |node| {
-                is_as(node.clone()) || is_comment(node.clone())
+        .flat_map(|source_code| {
+            let tree = parser.parse(&source_code, None).expect("Could not parse");
+            traverse(&source_code, tree.walk(), |node| {
+                is_as(node) || is_comment(node)
             })
         })
         .collect();
@@ -112,7 +103,7 @@ where
                 Ok(failure) => failures.push(failure),
                 Err(_) => {
                     //TODO It's not really an error
-                },
+                }
             }
         }
 
