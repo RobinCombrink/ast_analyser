@@ -1,10 +1,7 @@
-use std::{
-    collections::{btree_map::Entry, HashMap},
-    fs,
-};
+use std::fs;
 
-use tree_sitter::{InputEdit, Language, Node, Parser, Point, Tree, TreeCursor};
-use walkdir::{DirEntry, WalkDir};
+use tree_sitter::{Node, Parser, Point, TreeCursor};
+use walkdir::WalkDir;
 
 const AS_OPERATOR_ID: u16 = 234;
 
