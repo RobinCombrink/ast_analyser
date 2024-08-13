@@ -1,12 +1,20 @@
-use std::fs;
+use std::{fs, path::Path, process::exit};
 
 use anyhow::{anyhow, Error};
 
-use tree_sitter::{Node, Parser, Point, TreeCursor};
+use clap::Parser;
+use tree_sitter::{Node, Parser as TreeParser, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const AS_OPERATOR_ID: u16 = 234;
 const COMMENT_OPERATOR_ID: u16 = 410;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct CLIArguments {
+    #[clap(short = 'd', long = "directory", default_value = "test_files")]
+    directory_path: String,
+}
 
 #[derive(Debug)]
 struct FailureNode {
@@ -44,12 +52,23 @@ impl TryFrom<(&'_ [u8], Node<'_>)> for FailureNode {
 }
 
 fn main() {
-    let mut parser = Parser::new();
+    let args: CLIArguments = CLIArguments::parse();
+    let files_directory = Path::new(&args.directory_path);
+
+    if !files_directory.exists() {
+        println!(
+            "The provided directory does not exist: {:#?}",
+            files_directory
+        );
+        println!("Exiting");
+        exit(1)
+    }
+    let mut parser = TreeParser::new();
     parser
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let failures: Vec<FailureNode> = WalkDir::new("test_files/comment")
+    let failures: Vec<FailureNode> = WalkDir::new(files_directory)
         .into_iter()
         .filter_map(|entry| match entry {
             Ok(entry) => Some(entry),
