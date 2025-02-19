@@ -1,5 +1,9 @@
-use std::{fs, path::Path, process::exit};
 use clap::Parser;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::exit,
+};
 use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
@@ -11,6 +15,10 @@ const AS_OPERATOR_ID: u16 = 234;
 struct CLIArguments {
     #[clap(short = 'd', long = "directory", default_value = "test_files")]
     directory_path: String,
+    #[clap(short = 'a', long = "as-operator", default_value = "false")]
+    as_operator: bool,
+    #[clap(short = 'b', long = "bang-operator", default_value = "true")]
+    bang_operator: bool,
 }
 
 #[derive(Debug)]
@@ -19,6 +27,12 @@ struct FailureNode {
     name: String,
     start_position: Point,
     end_position: Point,
+}
+
+#[derive(Debug)]
+struct FailureFile {
+    file_path: PathBuf,
+    failure_nodes: Vec<FailureNode>,
 }
 
 impl From<Node<'_>> for FailureNode {
@@ -30,6 +44,11 @@ impl From<Node<'_>> for FailureNode {
             end_position: value.end_position(),
         }
     }
+}
+
+struct SourceFile {
+    file_path: PathBuf,
+    source: Vec<u8>,
 }
 
 fn main() {
@@ -50,7 +69,7 @@ fn main() {
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let failures: Vec<FailureNode> = WalkDir::new(files_directory)
+    let failures: Vec<FailureFile> = WalkDir::new(files_directory)
         .into_iter()
         .filter_map(|entry| match entry {
             Ok(entry) => Some(entry),
@@ -61,22 +80,36 @@ fn main() {
         })
         .filter(|entry| !entry.file_type().is_dir())
         .filter_map(|entry| match fs::read(entry.path()) {
-            Ok(source) => Some(source),
+            Ok(source) => Some(SourceFile {
+                file_path: entry.into_path().to_path_buf(),
+                source,
+            }),
             Err(e) => {
                 println!("{e}");
                 None
             }
         })
-        .flat_map(|source_code| {
-            let tree = parser.parse(&source_code, None).expect("Could not parse");
-            traverse(tree.walk(), |node| {
+        .map(|source_file| {
+            let tree = parser
+                .parse(&source_file.source, None)
+                .expect("Could not parse");
+            let failure_nodes = traverse(tree.walk(), |node| {
                 if is_as(node) || is_bang(node) {
                     Some(FailureNode::from(node))
                 } else {
                     None
                 }
-            })
+            });
+            if failure_nodes.len() > 0 {
+                Some(FailureFile {
+                    file_path: source_file.file_path,
+                    failure_nodes,
+                })
+            } else {
+                None
+            }
         })
+        .filter_map(|failure_file| failure_file)
         .collect();
 
     println!("Failures: {}", failures.len());
@@ -103,7 +136,7 @@ where
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         let node = cursor.node();
         if let Some(failure) = callback(node) {
-                failures.push(failure);
+            failures.push(failure);
         }
 
         if cursor.goto_first_child() {
