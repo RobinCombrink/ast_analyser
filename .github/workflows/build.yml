@@ -5,7 +5,7 @@ on:
     tags:
       - '**'
 env:
-  CRATE_NAME: no_as
+  CRATE_NAME: ast_analyser
   GITHUB_TOKEN: ${{ github.token }}
   RUST_BACKTRACE: 1
 jobs:
@@ -21,8 +21,8 @@ jobs:
           - os_name: Linux-x86_64
             os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
-            bin: analyser
-            name: analyser-linux-x86_64-gnu.tar.gz
+            bin: ast_analyser
+            name: ast_analyser-linux-x86_64-gnu.tar.gz
         toolchain:
           - stable
     steps:
@@ -78,8 +78,8 @@ jobs:
       - name: Publish release artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: analyser-${{ matrix.platform.os_name }}
-          path: "analyser-*"
+          name: ast_analyser-${{ matrix.platform.os_name }}
+          path: "ast_analyser-*"
         if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/' )
       - name: Generate SHA-256
         run: shasum -a 256 ${{ matrix.platform.name }}
@@ -92,6 +92,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           draft: true
-          files: "analyser*"
+          files: "ast_analyser*"
           generate_release_notes: 
         if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/' )

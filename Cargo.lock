@@ -68,6 +68,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
 
 [[package]]
+name = "ast_analyser"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cc",
+ "clap",
+ "serde",
+ "serde_json",
+ "tree-sitter",
+ "tree-sitter-dart",
+ "walkdir",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -145,20 +159,6 @@ name = "memchr"
 version = "2.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
-
-[[package]]
-name = "no_as"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cc",
- "clap",
- "serde",
- "serde_json",
- "tree-sitter",
- "tree-sitter-dart",
- "walkdir",
-]
 
 [[package]]
 name = "once_cell"
