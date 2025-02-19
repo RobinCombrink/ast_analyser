@@ -83,6 +83,32 @@ struct SourceFile {
     source: Vec<u8>,
 }
 
+impl SourceFile {
+    fn find_failures(self, parser: &mut tree_sitter::Parser) -> Option<FailureFile> {
+        let tree = parser.parse(&self.source, None).expect(&format!(
+            "Could not parse source file: {:#?}",
+            self.file_path
+        ));
+
+        let failure_nodes = traverse(tree.walk(), |node| {
+            if is_bang(node) {
+                Some(FailureNode::from(node))
+            } else {
+                None
+            }
+        });
+
+        if !failure_nodes.is_empty() {
+            Some(FailureFile {
+                file_path: self.file_path,
+                failure_nodes,
+            })
+        } else {
+            None
+        }
+    }
+}
+
 fn main() {
     let args = NodeAnalyser::parse();
 
@@ -122,7 +148,7 @@ fn analyse_file(parser: &mut tree_sitter::Parser, args: FileArguments) -> Vec<Fa
         }
     };
 
-    find_failures(parser, source_file).into_iter().collect()
+    source_file.find_failures(parser).into_iter().collect()
 }
 
 fn analyse_files(parser: &mut tree_sitter::Parser, args: FilesArguments) -> Vec<FailureFile> {
@@ -138,7 +164,7 @@ fn analyse_files(parser: &mut tree_sitter::Parser, args: FilesArguments) -> Vec<
                 None
             }
         })
-        .flat_map(|source_file| find_failures(parser, source_file))
+        .flat_map(|source_file| source_file.find_failures(parser))
         .collect()
 }
 
@@ -169,32 +195,8 @@ fn analyse_directory(
                 None
             }
         })
-        .flat_map(|source_file| find_failures(parser, source_file))
+        .flat_map(|source_file| source_file.find_failures(parser))
         .collect()
-}
-
-fn find_failures(parser: &mut tree_sitter::Parser, source_file: SourceFile) -> Option<FailureFile> {
-    let tree = parser.parse(&source_file.source, None).expect(&format!(
-        "Could not parse source file: {:#?}",
-        source_file.file_path
-    ));
-
-    let failure_nodes = traverse(tree.walk(), |node| {
-        if is_bang(node) {
-            Some(FailureNode::from(node))
-        } else {
-            None
-        }
-    });
-
-    if !failure_nodes.is_empty() {
-        Some(FailureFile {
-            file_path: source_file.file_path,
-            failure_nodes,
-        })
-    } else {
-        None
-    }
 }
 
 fn is_bang(node: Node) -> bool {
