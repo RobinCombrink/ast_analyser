@@ -58,14 +58,15 @@ fn main() {
     let files_directory = Path::new(&args.directory_path);
 
     if !files_directory.exists() {
-        println!(
+        eprintln!(
             "The provided directory does not exist: {:#?}",
             files_directory
         );
-        println!("Exiting");
-        exit(1)
+        eprintln!("Exiting");
+        exit(1);
     }
-    let mut parser = TreeParser::new();
+
+    let mut parser = tree_sitter::Parser::new();
     parser
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
@@ -97,7 +98,7 @@ fn main() {
 
     println!("Failures: {}", failures.len());
     for failure in failures {
-        println!("{:#?}", failure)
+        println!("{:#?}", failure);
     }
 }
 
