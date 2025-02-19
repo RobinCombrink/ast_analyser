@@ -54,23 +54,24 @@ enum NodeAnalyser {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct FailureOutput {
+    #[serde(rename = "transgressions")]
     failures: Vec<FailureFile>,
-    failure_node_count: usize,
-    failure_count: usize,
+    transgression_count: usize,
+    files_with_transgressions: usize,
 }
 
 impl FailureOutput {
     fn new(failures: Vec<FailureFile>) -> Self {
-        let failure_count = failures.len();
-        let failure_node_count = failures
+        let files_with_transgressions = failures.len();
+        let transgression_count = failures
             .iter()
             .flat_map(|failure_file| &failure_file.failure_nodes)
             .count();
 
         Self {
             failures,
-            failure_count,
-            failure_node_count: failure_node_count,
+            transgression_count,
+            files_with_transgressions,
         }
     }
 }
