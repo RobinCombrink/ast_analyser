@@ -1,0 +1,8 @@
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "github.vscode-github-actions",
+        "dart-code.dart-code",
+        "fill-labs.dependi"
+    ]
+}
