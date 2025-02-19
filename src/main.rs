@@ -67,8 +67,8 @@ struct FailureFile {
     failure_nodes: Vec<FailureNode>,
 }
 
-impl From<Node<'_>> for FailureNode {
-    fn from(value: Node) -> Self {
+impl From<&Node<'_>> for FailureNode {
+    fn from(value: &Node) -> Self {
         FailureNode {
             id: value.grammar_id(),
             name: value.grammar_name().to_owned(),
@@ -77,6 +77,21 @@ impl From<Node<'_>> for FailureNode {
         }
     }
 }
+
+trait FailureFinder {
+    fn find_failure(&self) -> Option<FailureNode>;
+}
+
+impl FailureFinder for Node<'_> {
+    fn find_failure(&self) -> Option<FailureNode> {
+            if is_bang(self) {
+                Some(FailureNode::from(self))
+            } else {
+                None
+            }
+    }
+}
+
 
 struct SourceFile {
     file_path: PathBuf,
@@ -90,13 +105,7 @@ impl SourceFile {
             self.file_path
         ));
 
-        let failure_nodes = traverse(tree.walk(), |node| {
-            if is_bang(node) {
-                Some(FailureNode::from(node))
-            } else {
-                None
-            }
-        });
+        let failure_nodes = traverse(tree.walk(), |node| node.find_failure());
 
         if !failure_nodes.is_empty() {
             Some(FailureFile {
@@ -199,7 +208,7 @@ fn analyse_directory(
         .collect()
 }
 
-fn is_bang(node: Node) -> bool {
+fn is_bang(node: &Node) -> bool {
     node.grammar_id() == BANG_OPERATOR_ID
 }
 
