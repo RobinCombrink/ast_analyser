@@ -83,6 +83,18 @@ impl FailureFinder {
     }
 }
 
+impl Default for FailureFinder {
+    fn default() -> Self {
+        let mut parser = tree_sitter::Parser::new();
+        parser
+            .set_language(&tree_sitter_dart::language())
+            .expect("Could not load Dart grammar");
+        Self {
+            parser: Default::default(),
+        }
+    }
+}
+
 trait FindFailureNode {
     fn find_failure(&self) -> Option<FailureNode>;
 }
