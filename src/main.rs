@@ -50,15 +50,12 @@ enum NodeAnalyser {
 fn main() {
     let args = NodeAnalyser::parse();
 
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_dart::language())
-        .expect("Could not load Dart grammar");
+    let failure_finder = FailureFinder::default();
 
     let failures = match args {
-        NodeAnalyser::File(args) => FailureFinder::analyse_file(&mut parser, args),
-        NodeAnalyser::Directory(args) => FailureFinder::analyse_directory(&mut parser, args),
-        NodeAnalyser::Files(args) => FailureFinder::analyse_files(&mut parser, args),
+        NodeAnalyser::File(args) => failure_finder.analyse_file(args.file_path),
+        NodeAnalyser::Directory(args) => failure_finder.analyse_directory(args.directory_path),
+        NodeAnalyser::Files(args) => failure_finder.analyse_files(args.file_paths),
     };
 
     println!(

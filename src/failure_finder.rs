@@ -7,8 +7,6 @@ use std::{
 use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
-use crate::{DirectoryArguments, FileArguments, FilesArguments};
-
 const BANG_OPERATOR_ID: u16 = 64;
 
 pub struct FailureFinder {
@@ -16,26 +14,23 @@ pub struct FailureFinder {
 }
 
 impl FailureFinder {
-    pub fn analyse_file(parser: &mut tree_sitter::Parser, args: FileArguments) -> Vec<FailureFile> {
-        let source_file = match fs::read(&args.file_path) {
-            Ok(source) => SourceFile {
-                file_path: args.file_path,
-                source,
-            },
+    pub fn analyse_file(mut self, file_path: PathBuf) -> Vec<FailureFile> {
+        let source_file = match fs::read(&file_path) {
+            Ok(source) => SourceFile::new(file_path, source),
             Err(e) => {
                 eprintln!("Could not read file_path: {e}");
                 exit(1);
             }
         };
 
-        source_file.find_failures(parser).into_iter().collect()
+        source_file
+            .find_failures(&mut self.parser)
+            .into_iter()
+            .collect()
     }
 
-    pub fn analyse_files(
-        parser: &mut tree_sitter::Parser,
-        args: FilesArguments,
-    ) -> Vec<FailureFile> {
-        args.file_paths
+    pub fn analyse_files(mut self, file_paths: Vec<PathBuf>) -> Vec<FailureFile> {
+        file_paths
             .iter()
             .filter_map(|file_path| match fs::read(file_path) {
                 Ok(source) => Some(SourceFile {
@@ -47,15 +42,12 @@ impl FailureFinder {
                     None
                 }
             })
-            .flat_map(|source_file| source_file.find_failures(parser))
+            .flat_map(|source_file| source_file.find_failures(&mut self.parser))
             .collect()
     }
 
-    pub fn analyse_directory(
-        parser: &mut tree_sitter::Parser,
-        args: DirectoryArguments,
-    ) -> Vec<FailureFile> {
-        let files_directory = Path::new(&args.directory_path);
+    pub fn analyse_directory(mut self, directory_path: PathBuf) -> Vec<FailureFile> {
+        let files_directory = Path::new(&directory_path);
         if !files_directory.exists() {
             eprintln!(
                 "The provided directory does not exist: {:#?}",
@@ -78,7 +70,7 @@ impl FailureFinder {
                     None
                 }
             })
-            .flat_map(|source_file| source_file.find_failures(parser))
+            .flat_map(|source_file| source_file.find_failures(&mut self.parser))
             .collect()
     }
 }
@@ -115,6 +107,9 @@ struct SourceFile {
 }
 
 impl SourceFile {
+    fn new(file_path: PathBuf, source: Vec<u8>) -> SourceFile {
+        SourceFile { file_path, source }
+    }
     fn find_failures(self, parser: &mut tree_sitter::Parser) -> Option<FailureFile> {
         let tree = parser.parse(&self.source, None).expect(&format!(
             "Could not parse source file: {:#?}",
