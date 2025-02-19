@@ -1,14 +1,10 @@
 use std::{fs, path::Path, process::exit};
-
-use anyhow::{anyhow, Error};
-
 use clap::Parser;
 use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const BANG_OPERATOR_ID: u16 = 64;
 const AS_OPERATOR_ID: u16 = 234;
-const COMMENT_OPERATOR_ID: u16 = 410;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -19,37 +15,20 @@ struct CLIArguments {
 
 #[derive(Debug)]
 struct FailureNode {
-    grammar_name: String,
-    grammar_id: u16,
+    id: u16,
+    name: String,
     start_position: Point,
     end_position: Point,
 }
 
-impl TryFrom<(&'_ [u8], Node<'_>)> for FailureNode {
-    type Error = Error;
-
-    fn try_from(value: (&'_ [u8], Node<'_>)) -> Result<Self, Self::Error> {
-        let (source, node) = value;
-        if is_as(node) || is_bang(node) || is_comment(node) {
-            return Ok(FailureNode {
-                grammar_name: node.grammar_name().to_owned(),
-                grammar_id: node.grammar_id(),
-                start_position: node.start_position(),
-                end_position: node.end_position(),
-            });
+impl From<Node<'_>> for FailureNode {
+    fn from(value: Node) -> Self {
+        FailureNode {
+            id: value.grammar_id(),
+            name: value.grammar_name().to_owned(),
+            start_position: value.start_position(),
+            end_position: value.end_position(),
         }
-
-        let text = node.utf8_text(source)?.to_lowercase();
-
-        if text.contains("todo") {
-            return Ok(FailureNode {
-                grammar_name: node.grammar_name().to_owned(),
-                grammar_id: node.grammar_id(),
-                start_position: node.start_position(),
-                end_position: node.end_position(),
-            });
-        }
-        Err(anyhow!("The comment does not contain a TODO"))
     }
 }
 
@@ -90,8 +69,12 @@ fn main() {
         })
         .flat_map(|source_code| {
             let tree = parser.parse(&source_code, None).expect("Could not parse");
-            traverse(&source_code, tree.walk(), |node| {
-                is_as(node) || is_comment(node) || is_bang(node)
+            traverse(tree.walk(), |node| {
+                if is_as(node) || is_bang(node) {
+                    Some(FailureNode::from(node))
+                } else {
+                    None
+                }
             })
         })
         .collect();
@@ -106,27 +89,21 @@ fn is_as(node: Node) -> bool {
     node.grammar_id() == AS_OPERATOR_ID
 }
 
-fn is_comment(node: Node) -> bool {
-    node.grammar_id() == COMMENT_OPERATOR_ID
-}
-
 fn is_bang(node: Node) -> bool {
     node.grammar_id() == BANG_OPERATOR_ID
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
-fn traverse<F>(source: &[u8], mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
+fn traverse<F>(mut cursor: TreeCursor, mut callback: F) -> Vec<FailureNode>
 where
-    F: FnMut(Node) -> bool,
+    F: FnMut(Node) -> Option<FailureNode>,
 {
     let mut failures = Vec::new();
     loop {
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         let node = cursor.node();
-        if callback(node) {
-            if let Ok(failure) = FailureNode::try_from((source, node)) {
+        if let Some(failure) = callback(node) {
                 failures.push(failure);
-            }
         }
 
         if cursor.goto_first_child() {
