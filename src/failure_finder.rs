@@ -83,7 +83,7 @@ impl Default for FailureFinder {
             .set_language(&tree_sitter_dart::language())
             .expect("Could not load Dart grammar");
         Self {
-            parser: Default::default(),
+            parser,
         }
     }
 }
