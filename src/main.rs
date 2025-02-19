@@ -8,7 +8,7 @@ use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const BANG_OPERATOR_ID: u16 = 64;
-const AS_OPERATOR_ID: u16 = 234;
+const AS_OPERATOR_ID: u16 = 242;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -94,7 +94,7 @@ fn main() {
                 .parse(&source_file.source, None)
                 .expect("Could not parse");
             let failure_nodes = traverse(tree.walk(), |node| {
-                if is_as(node) || is_bang(node) {
+                if (args.as_operator && is_as(node)) || (args.bang_operator && is_bang(node)) {
                     Some(FailureNode::from(node))
                 } else {
                     None
