@@ -6,6 +6,7 @@ use clap::Parser;
 use tree_sitter::{Node, Parser as TreeParser, Point, TreeCursor};
 use walkdir::WalkDir;
 
+const BANG_OPERATOR_ID: u16 = 64;
 const AS_OPERATOR_ID: u16 = 234;
 const COMMENT_OPERATOR_ID: u16 = 410;
 
@@ -28,7 +29,7 @@ impl TryFrom<(&'_ [u8], Node<'_>)> for FailureNode {
 
     fn try_from(value: (&'_ [u8], Node<'_>)) -> Result<Self, Self::Error> {
         let (source, node) = value;
-        if node.grammar_id() != COMMENT_OPERATOR_ID {
+        if is_as(node) || is_bang(node) {
             return Ok(FailureNode {
                 grammar_name: node.grammar_name().to_owned(),
                 grammar_id: node.grammar_id(),
@@ -88,7 +89,7 @@ fn main() {
         .flat_map(|source_code| {
             let tree = parser.parse(&source_code, None).expect("Could not parse");
             traverse(&source_code, tree.walk(), |node| {
-                is_as(node) || is_comment(node)
+                is_as(node) || is_comment(node) || is_bang(node)
             })
         })
         .collect();
@@ -104,7 +105,10 @@ fn is_as(node: Node) -> bool {
 }
 
 fn is_comment(node: Node) -> bool {
-    node.grammar_id() == COMMENT_OPERATOR_ID
+}
+
+fn is_bang(node: Node) -> bool {
+    node.grammar_id() == BANG_OPERATOR_ID
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs

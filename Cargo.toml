@@ -4,11 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.86"
-tree-sitter = "0.22.6"
+anyhow = "1.0.95"
+tree-sitter = "0.25.2"
 tree-sitter-dart = "0.0.4"
 walkdir = "2.5.0"
-clap = { version = "4.5.11", features = ["derive", "string"] }
+clap = { version = "4.5.30", features = ["derive", "string"] }
 
 [build-dependencies]
-cc="*"
+cc="1.2.14"
