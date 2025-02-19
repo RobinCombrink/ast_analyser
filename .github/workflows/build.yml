@@ -91,7 +91,7 @@ jobs:
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v1
         with:
-          draft: true
+          draft: false
           files: "ast_analyser*"
           generate_release_notes: 
         if: matrix.toolchain == 'stable' && startsWith( github.ref, 'refs/tags/' )
