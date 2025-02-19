@@ -4,6 +4,7 @@ use std::{
     process::exit,
 };
 
+use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
@@ -129,15 +130,24 @@ impl SourceFile {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Point")]
+struct PointSerde {
+    pub row: usize,
+    pub column: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct FailureNode {
     id: u16,
     name: String,
+    #[serde(with = "PointSerde")]
     start_position: Point,
+    #[serde(with = "PointSerde")]
     end_position: Point,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct FailureFile {
     file_path: PathBuf,
     pub(crate) failure_nodes: Vec<FailureNode>,

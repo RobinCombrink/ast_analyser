@@ -1,6 +1,10 @@
 use clap::Parser;
-use failure_finder::FailureFinder;
-use std::path::PathBuf;
+use failure_finder::{FailureFile, FailureFinder};
+use serde::{Deserialize, Serialize};
+use std::{
+    path::PathBuf,
+    process::{ExitCode, Termination},
+};
 mod failure_finder;
 
 #[derive(Parser, Debug)]
@@ -47,7 +51,46 @@ enum NodeAnalyser {
     Files(FilesArguments),
 }
 
-fn main() {
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct FailureOutput {
+    failures: Vec<FailureFile>,
+    failure_node_count: usize,
+    failure_count: usize,
+}
+
+impl FailureOutput {
+    fn new(failures: Vec<FailureFile>) -> Self {
+        let failure_count = failures.len();
+        let failure_node_count = failures
+            .iter()
+            .flat_map(|failure_file| &failure_file.failure_nodes)
+            .count();
+
+        Self {
+            failures,
+            failure_count,
+            failure_node_count: failure_node_count,
+        }
+    }
+}
+
+impl Termination for FailureOutput {
+    fn report(self) -> ExitCode {
+        match serde_json::to_string_pretty(&self) {
+            Ok(result) => {
+                println!("{result}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                println!("Failed to output failures: {:#?}", e);
+                ExitCode::FAILURE
+            }
+        }
+    }
+}
+
+fn main() -> FailureOutput {
     let args = NodeAnalyser::parse();
 
     let failure_finder = FailureFinder::default();
@@ -58,15 +101,5 @@ fn main() {
         NodeAnalyser::Files(args) => failure_finder.analyse_files(args.file_paths),
     };
 
-    println!(
-        "Failures: {}",
-        failures
-            .iter()
-            .flat_map(|failure_file| &failure_file.failure_nodes)
-            .count()
-    );
-
-    for failure in failures {
-        println!("{:#?}", failure);
-    }
+    FailureOutput::new(failures)
 }
