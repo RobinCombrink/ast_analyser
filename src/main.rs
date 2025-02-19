@@ -3,7 +3,7 @@ use std::{fs, path::Path, process::exit};
 use anyhow::{anyhow, Error};
 
 use clap::Parser;
-use tree_sitter::{Node, Parser as TreeParser, Point, TreeCursor};
+use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const BANG_OPERATOR_ID: u16 = 64;
@@ -24,12 +24,13 @@ struct FailureNode {
     start_position: Point,
     end_position: Point,
 }
+
 impl TryFrom<(&'_ [u8], Node<'_>)> for FailureNode {
     type Error = Error;
 
     fn try_from(value: (&'_ [u8], Node<'_>)) -> Result<Self, Self::Error> {
         let (source, node) = value;
-        if is_as(node) || is_bang(node) {
+        if is_as(node) || is_bang(node) || is_comment(node) {
             return Ok(FailureNode {
                 grammar_name: node.grammar_name().to_owned(),
                 grammar_id: node.grammar_id(),
@@ -105,6 +106,7 @@ fn is_as(node: Node) -> bool {
 }
 
 fn is_comment(node: Node) -> bool {
+    node.grammar_id() == COMMENT_OPERATOR_ID
 }
 
 fn is_bang(node: Node) -> bool {
@@ -116,7 +118,7 @@ fn traverse<F>(source: &[u8], mut cursor: TreeCursor, mut callback: F) -> Vec<Fa
 where
     F: FnMut(Node) -> bool,
 {
-    let mut failures: Vec<FailureNode> = Vec::new();
+    let mut failures = Vec::new();
     loop {
         // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         let node = cursor.node();
