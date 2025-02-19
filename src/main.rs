@@ -12,7 +12,11 @@ const BANG_OPERATOR_ID: u16 = 64;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Find failures in the provided file", long_about = None)]
 struct FileArguments {
-    #[clap(short = 'f', long = "path", default_value = "test_files/bang/bang.dart")]
+    #[clap(
+        short = 'f',
+        long = "path",
+        default_value = "test_files/bang/bang.dart"
+    )]
     file_path: PathBuf,
 }
 
@@ -24,11 +28,16 @@ struct DirectoryArguments {
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Find failures in multiple files", long_about = "Find failures in multiple files. Seperated by commas - no spaces")]
+#[command(
+    author,
+    version,
+    about = "Find failures in multiple files",
+    long_about = "Find failures in multiple files. Seperated by commas - no spaces"
+)]
 struct FilesArguments {
     #[clap(
-        short = 'd',
-        long = "directory",
+        short = 'f',
+        long = "files",
         value_delimiter = ',',
         default_value = "test_files/bang/bang.dart,test_files/bang/bang_copy.dart"
     )]
@@ -82,19 +91,26 @@ fn main() {
         .set_language(&tree_sitter_dart::language())
         .expect("Could not load Dart grammar");
 
-    let failures: Vec<FailureFile> = match args {
-        NodeAnalyser::File(args) => analyse_file(parser, args),
-        NodeAnalyser::Directory(args) => analyse_directory(parser, args),
-        NodeAnalyser::Files(args) => analyse_files(parser, args),
+    let failures = match args {
+        NodeAnalyser::File(args) => analyse_file(&mut parser, args),
+        NodeAnalyser::Directory(args) => analyse_directory(&mut parser, args),
+        NodeAnalyser::Files(args) => analyse_files(&mut parser, args),
     };
 
-    println!("Failures: {}", failures.clone().into_iter().flat_map(|failure_file| failure_file.failure_nodes).collect::<Vec<FailureNode>>().len());
+    println!(
+        "Failures: {}",
+        failures
+            .iter()
+            .flat_map(|failure_file| &failure_file.failure_nodes)
+            .count()
+    );
+
     for failure in failures {
         println!("{:#?}", failure);
     }
 }
 
-fn analyse_file(mut parser: tree_sitter::Parser, args: FileArguments) -> Vec<FailureFile> {
+fn analyse_file(parser: &mut tree_sitter::Parser, args: FileArguments) -> Vec<FailureFile> {
     let source_file = match fs::read(&args.file_path) {
         Ok(source) => SourceFile {
             file_path: args.file_path,
@@ -102,19 +118,14 @@ fn analyse_file(mut parser: tree_sitter::Parser, args: FileArguments) -> Vec<Fai
         },
         Err(e) => {
             eprintln!("Could not read file_path: {e}");
-            eprintln!("Exiting");
             exit(1);
         }
     };
 
-    let failure_file = find_failures(&mut parser, source_file);
-    match failure_file {
-        Some(failure_file) => vec![failure_file],
-        None => vec![],
-    }
+    find_failures(parser, source_file).into_iter().collect()
 }
 
-fn analyse_files(mut parser: tree_sitter::Parser, args: FilesArguments) -> Vec<FailureFile> {
+fn analyse_files(parser: &mut tree_sitter::Parser, args: FilesArguments) -> Vec<FailureFile> {
     args.file_paths
         .iter()
         .filter_map(|file_path| match fs::read(file_path) {
@@ -127,13 +138,12 @@ fn analyse_files(mut parser: tree_sitter::Parser, args: FilesArguments) -> Vec<F
                 None
             }
         })
-        .map(move |source_file| find_failures(&mut parser, source_file))
-        .filter_map(|failure_file| failure_file)
+        .flat_map(|source_file| find_failures(parser, source_file))
         .collect()
 }
 
 fn analyse_directory(
-    mut parser: tree_sitter::Parser,
+    parser: &mut tree_sitter::Parser,
     args: DirectoryArguments,
 ) -> Vec<FailureFile> {
     let files_directory = Path::new(&args.directory_path);
@@ -142,23 +152,16 @@ fn analyse_directory(
             "The provided directory does not exist: {:#?}",
             files_directory
         );
-        eprintln!("Exiting");
         exit(1);
     }
 
     WalkDir::new(files_directory)
         .into_iter()
-        .filter_map(|entry| match entry {
-            Ok(entry) => Some(entry),
-            Err(e) => {
-                println!("{e}");
-                None
-            }
-        })
+        .filter_map(Result::ok)
         .filter(|entry| !entry.file_type().is_dir())
         .filter_map(|entry| match fs::read(entry.path()) {
             Ok(source) => Some(SourceFile {
-                file_path: entry.into_path().to_path_buf(),
+                file_path: entry.into_path(),
                 source,
             }),
             Err(e) => {
@@ -166,15 +169,16 @@ fn analyse_directory(
                 None
             }
         })
-        .map(move |source_file| find_failures(&mut parser, source_file))
-        .filter_map(|failure_file| failure_file)
+        .flat_map(|source_file| find_failures(parser, source_file))
         .collect()
 }
 
 fn find_failures(parser: &mut tree_sitter::Parser, source_file: SourceFile) -> Option<FailureFile> {
-    let tree = parser
-        .parse(&source_file.source, None)
-        .expect("Could not parse");
+    let tree = parser.parse(&source_file.source, None).expect(&format!(
+        "Could not parse source file: {:#?}",
+        source_file.file_path
+    ));
+
     let failure_nodes = traverse(tree.walk(), |node| {
         if is_bang(node) {
             Some(FailureNode::from(node))
@@ -182,7 +186,8 @@ fn find_failures(parser: &mut tree_sitter::Parser, source_file: SourceFile) -> O
             None
         }
     });
-    if failure_nodes.len() > 0 {
+
+    if !failure_nodes.is_empty() {
         Some(FailureFile {
             file_path: source_file.file_path,
             failure_nodes,
