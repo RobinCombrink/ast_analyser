@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.95"
+clap = { version = "4.5.30", features = ["derive", "string"] }
 tree-sitter = "0.22.6"
 tree-sitter-dart = { git = "https://github.com/UserNobody14/tree-sitter-dart.git" }
 walkdir = "2.5.0"
-clap = { version = "4.5.30", features = ["derive", "string"] }
 
 [build-dependencies]
 cc="1.2.14"
