@@ -8,20 +8,43 @@ use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const BANG_OPERATOR_ID: u16 = 64;
-const AS_OPERATOR_ID: u16 = 242;
 
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct CLIArguments {
-    #[clap(short = 'd', long = "directory", default_value = "test_files")]
-    directory_path: String,
-    #[clap(short = 'a', long = "as-operator", default_value = "false")]
-    as_operator: bool,
-    #[clap(short = 'b', long = "bang-operator", default_value = "true")]
-    bang_operator: bool,
+#[command(author, version, about = "Find failures in the provided file", long_about = None)]
+struct FileArguments {
+    #[clap(short = 'f', long = "path", default_value = "test_files/bang/bang.dart")]
+    file_path: PathBuf,
 }
 
-#[derive(Debug)]
+#[derive(Parser, Debug)]
+#[command(author, version, about = "Find failures in all files in a directory recursively", long_about = None)]
+struct DirectoryArguments {
+    #[clap(short = 'd', long = "directory", default_value = "test_files")]
+    directory_path: PathBuf,
+}
+
+#[derive(Parser, Debug)]
+#[command(author, version, about = "Find failures in multiple files", long_about = "Find failures in multiple files. Seperated by commas - no spaces")]
+struct FilesArguments {
+    #[clap(
+        short = 'd',
+        long = "directory",
+        value_delimiter = ',',
+        default_value = "test_files/bang/bang.dart,test_files/bang/bang_copy.dart"
+    )]
+    file_paths: Vec<PathBuf>,
+}
+
+#[derive(Parser, Debug)]
+#[clap(name = "NodeAnalyser ")]
+#[command(version, about, long_about = None)]
+enum NodeAnalyser {
+    File(FileArguments),
+    Directory(DirectoryArguments),
+    Files(FilesArguments),
+}
+
+#[derive(Debug, Clone)]
 struct FailureNode {
     id: u16,
     name: String,
@@ -29,7 +52,7 @@ struct FailureNode {
     end_position: Point,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FailureFile {
     file_path: PathBuf,
     failure_nodes: Vec<FailureNode>,
@@ -52,9 +75,68 @@ struct SourceFile {
 }
 
 fn main() {
-    let args: CLIArguments = CLIArguments::parse();
-    let files_directory = Path::new(&args.directory_path);
+    let args = NodeAnalyser::parse();
 
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(&tree_sitter_dart::language())
+        .expect("Could not load Dart grammar");
+
+    let failures: Vec<FailureFile> = match args {
+        NodeAnalyser::File(args) => analyse_file(parser, args),
+        NodeAnalyser::Directory(args) => analyse_directory(parser, args),
+        NodeAnalyser::Files(args) => analyse_files(parser, args),
+    };
+
+    println!("Failures: {}", failures.clone().into_iter().flat_map(|failure_file| failure_file.failure_nodes).collect::<Vec<FailureNode>>().len());
+    for failure in failures {
+        println!("{:#?}", failure);
+    }
+}
+
+fn analyse_file(mut parser: tree_sitter::Parser, args: FileArguments) -> Vec<FailureFile> {
+    let source_file = match fs::read(&args.file_path) {
+        Ok(source) => SourceFile {
+            file_path: args.file_path,
+            source,
+        },
+        Err(e) => {
+            eprintln!("Could not read file_path: {e}");
+            eprintln!("Exiting");
+            exit(1);
+        }
+    };
+
+    let failure_file = find_failures(&mut parser, source_file);
+    match failure_file {
+        Some(failure_file) => vec![failure_file],
+        None => vec![],
+    }
+}
+
+fn analyse_files(mut parser: tree_sitter::Parser, args: FilesArguments) -> Vec<FailureFile> {
+    args.file_paths
+        .iter()
+        .filter_map(|file_path| match fs::read(file_path) {
+            Ok(source) => Some(SourceFile {
+                file_path: PathBuf::from(file_path),
+                source,
+            }),
+            Err(e) => {
+                println!("Could not read file at: {:#?}\n{e}", file_path);
+                None
+            }
+        })
+        .map(move |source_file| find_failures(&mut parser, source_file))
+        .filter_map(|failure_file| failure_file)
+        .collect()
+}
+
+fn analyse_directory(
+    mut parser: tree_sitter::Parser,
+    args: DirectoryArguments,
+) -> Vec<FailureFile> {
+    let files_directory = Path::new(&args.directory_path);
     if !files_directory.exists() {
         eprintln!(
             "The provided directory does not exist: {:#?}",
@@ -64,12 +146,7 @@ fn main() {
         exit(1);
     }
 
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter_dart::language())
-        .expect("Could not load Dart grammar");
-
-    let failures: Vec<FailureFile> = WalkDir::new(files_directory)
+    WalkDir::new(files_directory)
         .into_iter()
         .filter_map(|entry| match entry {
             Ok(entry) => Some(entry),
@@ -89,37 +166,30 @@ fn main() {
                 None
             }
         })
-        .map(|source_file| {
-            let tree = parser
-                .parse(&source_file.source, None)
-                .expect("Could not parse");
-            let failure_nodes = traverse(tree.walk(), |node| {
-                if (args.as_operator && is_as(node)) || (args.bang_operator && is_bang(node)) {
-                    Some(FailureNode::from(node))
-                } else {
-                    None
-                }
-            });
-            if failure_nodes.len() > 0 {
-                Some(FailureFile {
-                    file_path: source_file.file_path,
-                    failure_nodes,
-                })
-            } else {
-                None
-            }
-        })
+        .map(move |source_file| find_failures(&mut parser, source_file))
         .filter_map(|failure_file| failure_file)
-        .collect();
-
-    println!("Failures: {}", failures.len());
-    for failure in failures {
-        println!("{:#?}", failure);
-    }
+        .collect()
 }
 
-fn is_as(node: Node) -> bool {
-    node.grammar_id() == AS_OPERATOR_ID
+fn find_failures(parser: &mut tree_sitter::Parser, source_file: SourceFile) -> Option<FailureFile> {
+    let tree = parser
+        .parse(&source_file.source, None)
+        .expect("Could not parse");
+    let failure_nodes = traverse(tree.walk(), |node| {
+        if is_bang(node) {
+            Some(FailureNode::from(node))
+        } else {
+            None
+        }
+    });
+    if failure_nodes.len() > 0 {
+        Some(FailureFile {
+            file_path: source_file.file_path,
+            failure_nodes,
+        })
+    } else {
+        None
+    }
 }
 
 fn is_bang(node: Node) -> bool {
