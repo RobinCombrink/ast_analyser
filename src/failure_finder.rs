@@ -82,16 +82,13 @@ impl Default for FailureFinder {
         parser
             .set_language(&tree_sitter_dart::language())
             .expect("Could not load Dart grammar");
-        Self {
-            parser,
-        }
+        Self { parser }
     }
 }
 
-
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct FailureOutput {
+pub struct FailureOutput {
     #[serde(rename = "transgressions")]
     failures: Vec<FailureFile>,
     transgression_count: usize,
@@ -179,7 +176,7 @@ struct PointSerde {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct FailureNode {
+pub struct FailureNode {
     id: u16,
     name: String,
     #[serde(with = "PointSerde")]
@@ -189,9 +186,9 @@ pub(crate) struct FailureNode {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct FailureFile {
+pub struct FailureFile {
     file_path: PathBuf,
-    pub(crate) failure_nodes: Vec<FailureNode>,
+    failure_nodes: Vec<FailureNode>,
 }
 
 impl From<&Node<'_>> for FailureNode {
