@@ -30,31 +30,16 @@ impl FailureFinder {
     }
 
     pub fn analyse_files(mut self, file_paths: Vec<PathBuf>) -> Result<Vec<Option<FailureFile>>> {
-        let source_files = file_paths
-            .iter()
-            .map(|file_path| match fs::read(file_path) {
-                Ok(source) => Ok(SourceFile {
-                    file_path: PathBuf::from(file_path),
-                    source,
-                }),
-                Err(err) => Err(anyhow!(
-                    "Could not analyse file: {:?} read file_path",
-                    file_path
-                ))
-                .with_context(|| err),
-            })
-            .collect::<Result<Vec<SourceFile>>>();
-
-        match source_files {
-            Ok(source_files) => Ok(source_files
-                .into_iter()
-                .map(|source_file| source_file.find_failures(&mut self.parser))
-                .collect()),
-            Err(err) => Err(err),
-        }
+        file_paths
+            .into_iter()
+            .map(|file_path| self.analyse_file(file_path))
+            .collect()
     }
 
-    pub fn analyse_directory(mut self, directory_path: PathBuf) -> Result<Vec<Option<FailureFile>>> {
+    pub fn analyse_directory(
+        mut self,
+        directory_path: PathBuf,
+    ) -> Result<Vec<Option<FailureFile>>> {
         let files_directory = Path::new(&directory_path);
         if !files_directory.exists() {
             Err(anyhow!(
@@ -183,8 +168,8 @@ pub struct FailureNode {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FailureFile {
-    file_path: PathBuf,
-    failure_nodes: Vec<FailureNode>,
+    pub file_path: PathBuf,
+    pub failure_nodes: Vec<FailureNode>,
 }
 
 impl From<&Node<'_>> for FailureNode {
