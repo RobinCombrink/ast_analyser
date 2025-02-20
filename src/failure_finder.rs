@@ -1,7 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::exit,
+    process::{exit, ExitCode, Termination},
 };
 
 use serde::{Deserialize, Serialize};
@@ -84,6 +84,47 @@ impl Default for FailureFinder {
             .expect("Could not load Dart grammar");
         Self {
             parser,
+        }
+    }
+}
+
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct FailureOutput {
+    #[serde(rename = "transgressions")]
+    failures: Vec<FailureFile>,
+    transgression_count: usize,
+    files_with_transgressions: usize,
+}
+
+impl FailureOutput {
+    pub fn new(failures: Vec<FailureFile>) -> Self {
+        let files_with_transgressions = failures.len();
+        let transgression_count = failures
+            .iter()
+            .flat_map(|failure_file| &failure_file.failure_nodes)
+            .count();
+
+        Self {
+            failures,
+            transgression_count,
+            files_with_transgressions,
+        }
+    }
+}
+
+impl Termination for FailureOutput {
+    fn report(self) -> ExitCode {
+        match serde_json::to_string_pretty(&self) {
+            Ok(result) => {
+                println!("{result}");
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                println!("Failed to output failures: {:#?}", e);
+                ExitCode::FAILURE
+            }
         }
     }
 }
