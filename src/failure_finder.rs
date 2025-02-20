@@ -1,9 +1,10 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{exit, ExitCode, Termination},
+    process::{ExitCode, Termination},
 };
 
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
@@ -15,63 +16,58 @@ pub struct FailureFinder {
 }
 
 impl FailureFinder {
-    pub fn analyse_file(mut self, file_path: PathBuf) -> Vec<FailureFile> {
+    pub fn analyse_file(&mut self, file_path: PathBuf) -> Result<Option<FailureFile>> {
         let source_file = match fs::read(&file_path) {
             Ok(source) => SourceFile::new(file_path, source),
-            Err(e) => {
-                eprintln!("Could not read file_path: {e}");
-                exit(1);
-            }
+            Err(e) => Err(anyhow!(
+                "Could not analyse file: {:?} read file_path",
+                file_path
+            ))
+            .with_context(|| e)?,
         };
 
-        source_file
-            .find_failures(&mut self.parser)
-            .into_iter()
-            .collect()
+        Ok(source_file.find_failures(&mut self.parser))
     }
 
-    pub fn analyse_files(mut self, file_paths: Vec<PathBuf>) -> Vec<FailureFile> {
-        file_paths
+    pub fn analyse_files(mut self, file_paths: Vec<PathBuf>) -> Result<Vec<Option<FailureFile>>> {
+        let source_files = file_paths
             .iter()
-            .filter_map(|file_path| match fs::read(file_path) {
-                Ok(source) => Some(SourceFile {
+            .map(|file_path| match fs::read(file_path) {
+                Ok(source) => Ok(SourceFile {
                     file_path: PathBuf::from(file_path),
                     source,
                 }),
-                Err(e) => {
-                    println!("Could not read file at: {:#?}\n{e}", file_path);
-                    None
-                }
+                Err(err) => Err(anyhow!(
+                    "Could not analyse file: {:?} read file_path",
+                    file_path
+                ))
+                .with_context(|| err),
             })
-            .flat_map(|source_file| source_file.find_failures(&mut self.parser))
-            .collect()
+            .collect::<Result<Vec<SourceFile>>>();
+
+        match source_files {
+            Ok(source_files) => Ok(source_files
+                .into_iter()
+                .map(|source_file| source_file.find_failures(&mut self.parser))
+                .collect()),
+            Err(err) => Err(err),
+        }
     }
 
-    pub fn analyse_directory(mut self, directory_path: PathBuf) -> Vec<FailureFile> {
+    pub fn analyse_directory(mut self, directory_path: PathBuf) -> Result<Vec<Option<FailureFile>>> {
         let files_directory = Path::new(&directory_path);
         if !files_directory.exists() {
-            eprintln!(
+            Err(anyhow!(
                 "The provided directory does not exist: {:#?}",
                 files_directory
-            );
-            exit(1);
+            ))?;
         }
 
         WalkDir::new(files_directory)
             .into_iter()
             .filter_map(Result::ok)
             .filter(|entry| !entry.file_type().is_dir())
-            .filter_map(|entry| match fs::read(entry.path()) {
-                Ok(source) => Some(SourceFile {
-                    file_path: entry.into_path(),
-                    source,
-                }),
-                Err(e) => {
-                    println!("{e}");
-                    None
-                }
-            })
-            .flat_map(|source_file| source_file.find_failures(&mut self.parser))
+            .map(|entry| self.analyse_file(entry.into_path()))
             .collect()
     }
 }
