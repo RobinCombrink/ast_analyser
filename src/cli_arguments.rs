@@ -42,6 +42,6 @@ pub struct FilesArguments {
 #[command(version, about, long_about = None)]
 pub enum NodeAnalyser {
     File(FileArguments),
-    Directory(DirectoryArguments),
     Files(FilesArguments),
+    Directory(DirectoryArguments),
 }

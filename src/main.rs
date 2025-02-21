@@ -16,8 +16,8 @@ fn main() -> Result<FailureOutput> {
                 Err(err) => Err(err),
             }
         }
-        NodeAnalyser::Directory(args) => failure_finder.analyse_directory(args.directory_path),
         NodeAnalyser::Files(args) => failure_finder.analyse_files(args.file_paths),
+        NodeAnalyser::Directory(args) => failure_finder.analyse_directory(args.directory_path),
     };
 
     match failures {
