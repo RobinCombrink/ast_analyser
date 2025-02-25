@@ -200,9 +200,9 @@ where
 {
     let mut failures = Vec::new();
     loop {
-        // println!("name: {}, id: {}", cursor.node().grammar_name(), cursor.node().grammar_id());
         let node = cursor.node();
         if let Some(failure) = callback(node) {
+            // print_node_information(node);
             failures.push(failure);
         }
 
@@ -223,5 +223,26 @@ where
                 break;
             }
         }
+    }
+}
+
+#[allow(dead_code)]
+fn print_node_information(node: Node<'_>) {
+    println!("name: {}, id: {}", node.grammar_name(), node.grammar_id());
+    let sibling = node.prev_sibling();
+    if let Some(sibling) = sibling {
+        println!(
+            "sibName: {}, sibId: {}",
+            sibling.grammar_name(),
+            sibling.grammar_id()
+        );
+    }
+    let parent = node.parent();
+    if let Some(parent) = parent {
+        println!(
+            "parentName: {}, parentId: {}",
+            parent.grammar_name(),
+            parent.grammar_id()
+        );
     }
 }
