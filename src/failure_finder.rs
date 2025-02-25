@@ -10,6 +10,8 @@ use tree_sitter::{Node, Point, TreeCursor};
 use walkdir::WalkDir;
 
 const BANG_OPERATOR_ID: u16 = 64;
+const NEGATION_OPERATOR_ID: u16 = 235;
+const IS_OPERATOR_ID: u16 = 240;
 
 pub struct FailureFinder {
     parser: tree_sitter::Parser,
@@ -185,12 +187,25 @@ impl From<&Node<'_>> for FailureNode {
 
 fn is_bang(node: &Node) -> bool {
     node.grammar_id() == BANG_OPERATOR_ID
-        && !(node
-            .prev_sibling()
-            .is_some_and(|sibling| sibling.grammar_id() == 235))
-        && !(node
-            .parent()
-            .is_some_and(|parent| parent.grammar_id() == 235))
+        && !any_neighbour_is(node, |node| is_negation_operator(&node))
+        && !any_neighbour_is(&node, |node| is_is_operator(&node))
+}
+
+fn any_neighbour_is<F>(node: &Node<'_>, mut callback: F) -> bool
+where
+    F: FnMut(Node) -> bool,
+{
+    let sibling_is = node.prev_sibling().is_some_and(|sibling| callback(sibling));
+    let parent_is = node.parent().is_some_and(|sibling| callback(sibling));
+    sibling_is || parent_is
+}
+
+fn is_negation_operator(node: &Node) -> bool {
+    node.grammar_id() == NEGATION_OPERATOR_ID
+}
+
+fn is_is_operator(node: &Node) -> bool {
+    node.grammar_id() == IS_OPERATOR_ID
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs

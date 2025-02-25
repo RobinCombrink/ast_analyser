@@ -48,6 +48,7 @@ fn analysing_files_with_red_herrings_returns_nones() {
     let failure = failure_finder.analyse_files(vec![
         "test_files/no_errors/negation_operator.dart".into(),
         "test_files/no_errors/not_equals.dart".into(),
+        "test_files/no_errors/is_not.dart".into(),
     ]);
 
     assert!(
