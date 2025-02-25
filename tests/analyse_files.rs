@@ -41,6 +41,30 @@ fn analysing_files_with_no_failures_returns_nones() {
         failure
     );
 }
+#[test]
+fn analysing_files_with_red_herrings_returns_nones() {
+    let failure_finder = FailureFinder::default();
+
+    let failure = failure_finder.analyse_files(vec![
+        "test_files/no_errors/negation_operator.dart".into(),
+        "test_files/no_errors/not_equals.dart".into(),
+    ]);
+
+    assert!(
+        failure.is_ok(),
+        "Returned Err when not expected: {:#?}",
+        failure
+    );
+    assert!(
+        failure
+            .as_ref()
+            .unwrap()
+            .iter()
+            .all(|result| result.is_none()),
+        "FailureFile had some errors when none were expected: {:#?}",
+        failure
+    );
+}
 
 #[test]
 fn analysing_files_with_failures_returns_failure_file() {

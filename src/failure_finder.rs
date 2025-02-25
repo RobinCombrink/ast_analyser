@@ -185,6 +185,12 @@ impl From<&Node<'_>> for FailureNode {
 
 fn is_bang(node: &Node) -> bool {
     node.grammar_id() == BANG_OPERATOR_ID
+        && !(node
+            .prev_sibling()
+            .is_some_and(|sibling| sibling.grammar_id() == 235))
+        && !(node
+            .parent()
+            .is_some_and(|parent| parent.grammar_id() == 235))
 }
 
 // Inspired by: https://github.com/skmendez/tree-sitter-traversal/blob/main/src/lib.rs
