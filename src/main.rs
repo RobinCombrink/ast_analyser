@@ -25,7 +25,7 @@ fn main() -> Result<FailureOutput> {
             failures.into_iter().filter_map(|failure| failure).collect(),
         )),
         Err(err) => {
-            Err(anyhow!("Something went wrong finding transgressions")).with_context(|| err)
+            Err(anyhow!("Something went wrong finding transgressions:\n{:?}", err))
         }
     }
 }
