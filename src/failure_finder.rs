@@ -133,10 +133,9 @@ impl SourceFile {
         SourceFile { file_path, source }
     }
     fn find_failures(self, parser: &mut tree_sitter::Parser) -> Option<FailureFile> {
-        let tree = parser.parse(&self.source, None).expect(&format!(
-            "Could not parse source file: {:#?}",
-            self.file_path
-        ));
+        let tree = parser.parse(&self.source, None).unwrap_or_else(|| {
+            panic!("Could not parse source file: {:#?}", self.file_path)
+        });
 
         let failure_nodes = traverse(tree.walk(), |node| node.find_failure());
 
@@ -188,15 +187,15 @@ impl From<&Node<'_>> for FailureNode {
 fn is_bang(node: &Node) -> bool {
     node.grammar_id() == BANG_OPERATOR_ID
         && !any_neighbour_is(node, |node| is_negation_operator(&node))
-        && !any_neighbour_is(&node, |node| is_is_operator(&node))
+        && !any_neighbour_is(node, |node| is_is_operator(&node))
 }
 
 fn any_neighbour_is<F>(node: &Node<'_>, mut callback: F) -> bool
 where
     F: FnMut(Node) -> bool,
 {
-    let sibling_is = node.prev_sibling().is_some_and(|sibling| callback(sibling));
-    let parent_is = node.parent().is_some_and(|sibling| callback(sibling));
+    let sibling_is = node.prev_sibling().is_some_and(&mut callback);
+    let parent_is = node.parent().is_some_and(callback);
     sibling_is || parent_is
 }
 

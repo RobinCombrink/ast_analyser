@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use ast_analyser::cli_arguments::NodeAnalyser;
 use ast_analyser::failure_finder::{FailureFinder, FailureOutput};
 use clap::Parser;
@@ -16,7 +16,7 @@ fn main() -> Result<FailureOutput> {
 
     match failures {
         Ok(failures) => Ok(FailureOutput::new(
-            failures.into_iter().filter_map(|failure| failure).collect(),
+            failures.into_iter().flatten().collect(),
         )),
         Err(err) => {
             Err(anyhow!("Something went wrong finding transgressions:\n{:?}", err))

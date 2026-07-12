@@ -87,7 +87,7 @@ fn analysing_files_with_failures_returns_failure_file() {
         failure
             .iter()
             .filter_map(|result| result.clone())
-            .all(|failure| failure.failure_nodes.len() > 0),
+            .all(|failure| !failure.failure_nodes.is_empty()),
         "File found Some but had no failure nodes: {:#?}",
         failure
     );
