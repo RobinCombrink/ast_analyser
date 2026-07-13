@@ -46,7 +46,7 @@ jobs:
             export OPENSSL_DIR="$OPENSSL_PATH"
           fi
       - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
+        uses: houseabsolute/actions-rust-cross@v1
         with:
           command: "build"
           target: ${{ matrix.platform.target }}
@@ -54,7 +54,7 @@ jobs:
           args: "--locked --release"
           strip: true
       - name: Run tests
-        uses: houseabsolute/actions-rust-cross@v0
+        uses: houseabsolute/actions-rust-cross@v1
         with:
           command: "test"
           target: ${{ matrix.platform.target }}
