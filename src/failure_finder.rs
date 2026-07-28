@@ -133,9 +133,9 @@ impl SourceFile {
         SourceFile { file_path, source }
     }
     fn find_failures(self, parser: &mut tree_sitter::Parser) -> Option<FailureFile> {
-        let tree = parser.parse(&self.source, None).unwrap_or_else(|| {
-            panic!("Could not parse source file: {:#?}", self.file_path)
-        });
+        let tree = parser
+            .parse(&self.source, None)
+            .unwrap_or_else(|| panic!("Could not parse source file: {:#?}", self.file_path));
 
         let failure_nodes = traverse(tree.walk(), |node| node.find_failure());
 

@@ -15,11 +15,10 @@ fn main() -> Result<FailureOutput> {
     };
 
     match failures {
-        Ok(failures) => Ok(FailureOutput::new(
-            failures.into_iter().flatten().collect(),
+        Ok(failures) => Ok(FailureOutput::new(failures.into_iter().flatten().collect())),
+        Err(err) => Err(anyhow!(
+            "Something went wrong finding transgressions:\n{:?}",
+            err
         )),
-        Err(err) => {
-            Err(anyhow!("Something went wrong finding transgressions:\n{:?}", err))
-        }
     }
 }
